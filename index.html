@@ -1,178 +1,817 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HMM Lang</title>
-<style>
-body{font-family:system-ui;background:#0b0b0c;color:#e6e6e6;margin:0;display:flex;flex-direction:column;height:100vh}
-header{text-align:center;padding:14px;border-bottom:1px solid #222}
-.container{flex:1;display:flex;flex-direction:column;padding:10px}
-textarea{flex:1;border:none;border-radius:10px;padding:12px;background:#171717;color:white}
-.buttons{display:flex;gap:10px;margin-top:10px}
-button{flex:1;padding:10px;border:none;border-radius:8px;background:#10a37f;color:black;font-weight:bold;cursor:pointer}
-.output{margin-top:10px;padding:10px;background:#171717;border-radius:10px;min-height:60px}
-</style>
-</head>
-<body>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HMM Lang — Translator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
-<header>HMM Lang Translator</header>
+  <style>
+    /* ─── RESET & BASE ────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-<div class="container">
-<textarea id="input" placeholder="Type here..."></textarea>
+    :root {
+      --bg:          #0d0e11;
+      --surface:     #14161b;
+      --surface2:    #1c1f27;
+      --border:      #252830;
+      --border2:     #2e3240;
+      --text:        #e8eaf0;
+      --muted:       #5a5f72;
+      --accent:      #7ee8c2;
+      --accent2:     #4fc4a0;
+      --accent-dim:  rgba(126,232,194,.12);
+      --accent-glow: rgba(126,232,194,.25);
+      --error:       #ff6b6b;
+      --radius:      14px;
+      --radius-sm:   8px;
+      --transition:  .18s ease;
+    }
 
-<div class="buttons">
-<button onclick="encode()">Encode</button>
-<button onclick="decode()">Decode</button>
-<button onclick="copyText()">Copy</button>
-</div>
+    html { height: 100%; }
 
-<div class="output" id="output"></div>
-</div>
+    body {
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0 16px 60px;
+      /* subtle noise grain */
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+    }
 
-<script>
-function encode(){
-let text=document.getElementById("input").value.toLowerCase();
-let result=[];
-for(let c of text){
-if(c>='a'&&c<='z'){
-let pos=c.charCodeAt(0)-96;
-result.push("h"+pos);
-}else if(c===" "){result.push(" ");}
-}
-document.getElementById("output").innerText=result.join(" ");
-}
+    /* ─── HEADER ──────────────────────────────────────────────────── */
+    header {
+      width: 100%;
+      max-width: 680px;
+      padding: 48px 0 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      animation: fadeDown .5s ease both;
+    }
 
-function decode(){
-let text=document.getElementById("input").value.trim().split(/\s+/);
-let res="";
-for(let part of text){
-if(part.startsWith("h")){
-let num=parseInt(part.slice(1));
-if(num>=1&&num<=26){
-res+=String.fromCharCode(96+num);
-}
-}else{res+=" ";}
-}
-document.getElementById("output").innerText=res;
-}
+    .logo-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
 
-function copyText(){
-let text=document.getElementById("output").innerText;
-navigator.clipboard.writeText(text);
-alert("Copied!");
-}
-</script>
+    .logo-icon {
+      width: 36px; height: 36px;
+      background: var(--accent-dim);
+      border: 1px solid rgba(126,232,194,.3);
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      font-size: 17px;
+      letter-spacing: -.5px;
+    }
 
-</body>
-</html>
+    h1 {
+      font-size: clamp(22px, 5vw, 28px);
+      font-weight: 800;
+      letter-spacing: -.5px;
+      color: var(--text);
+    }
+
+    h1 span { color: var(--accent); }
+
+    .tagline {
+      font-size: 13px;
+      color: var(--muted);
+      font-family: 'DM Mono', monospace;
+      font-weight: 300;
+      letter-spacing: .3px;
+    }
+
+    /* ─── MAIN CARD ───────────────────────────────────────────────── */
+    .card {
+      width: 100%;
+      max-width: 680px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: 0 4px 40px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.02);
+      animation: fadeUp .5s .1s ease both;
+    }
+
+    /* ─── MODE TOGGLE ─────────────────────────────────────────────── */
+    .mode-bar {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+
+    .mode-btn {
+      flex: 1;
+      padding: 14px;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-family: 'Syne', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: .6px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: color var(--transition), background var(--transition);
+      position: relative;
+    }
+
+    .mode-btn::after {
+      content: '';
+      position: absolute;
+      bottom: -1px; left: 0; right: 0;
+      height: 2px;
+      background: var(--accent);
+      transform: scaleX(0);
+      transition: transform var(--transition);
+    }
+
+    .mode-btn.active {
+      color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    .mode-btn.active::after { transform: scaleX(1); }
+    .mode-btn:not(.active):hover { color: var(--text); background: rgba(255,255,255,.03); }
+
+    /* ─── INPUT AREA ──────────────────────────────────────────────── */
+    .input-section { padding: 20px 20px 0; }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+      font-family: 'DM Mono', monospace;
+    }
 
     textarea {
       width: 100%;
-      height: 100px;
-      margin-top: 15px;
-      padding: 10px;
-      border-radius: 8px;
-      border: none;
+      min-height: 120px;
+      max-height: 260px;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      font-size: 14px;
+      line-height: 1.7;
+      padding: 14px 16px;
+      resize: vertical;
       outline: none;
-      resize: none;
-      background: #0f172a;
-      color: white;
+      transition: border-color var(--transition), box-shadow var(--transition);
     }
 
-    .buttons {
+    textarea::placeholder { color: var(--muted); }
+
+    textarea:focus {
+      border-color: rgba(126,232,194,.4);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+
+    /* ─── ACTION BAR ──────────────────────────────────────────────── */
+    .action-bar {
+      padding: 12px 20px 16px;
       display: flex;
+      align-items: center;
       gap: 10px;
-      margin-top: 15px;
+      justify-content: space-between;
     }
 
-    button {
-      flex: 1;
-      padding: 10px;
-      border: none;
-      border-radius: 8px;
+    .char-count {
+      font-size: 11px;
+      color: var(--muted);
+      font-family: 'DM Mono', monospace;
+    }
+
+    .btn-group { display: flex; gap: 8px; }
+
+    .btn {
+      padding: 9px 18px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border2);
+      font-family: 'Syne', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
       cursor: pointer;
-      background: #3b82f6;
-      color: white;
-      font-weight: bold;
+      transition: all var(--transition);
+      letter-spacing: .3px;
     }
 
-    button:hover {
-      background: #2563eb;
+    .btn-ghost {
+      background: none;
+      color: var(--muted);
     }
 
-    .output {
-      margin-top: 15px;
-      padding: 10px;
-      background: #0f172a;
-      border-radius: 8px;
-      min-height: 60px;
+    .btn-ghost:hover { color: var(--text); border-color: var(--muted); background: rgba(255,255,255,.03); }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #0d1610;
+      border-color: var(--accent);
+      font-weight: 700;
+    }
+
+    .btn-primary:hover {
+      background: #9af0d0;
+      box-shadow: 0 0 20px var(--accent-glow);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:active { transform: translateY(0); }
+
+    /* ─── DIVIDER ─────────────────────────────────────────────────── */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 0 20px;
+    }
+
+    /* ─── OUTPUT AREA ─────────────────────────────────────────────── */
+    .output-section {
+      padding: 16px 20px 20px;
+      min-height: 90px;
+    }
+
+    .output-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .output-box {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      font-family: 'DM Mono', monospace;
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text);
+      min-height: 80px;
+      word-break: break-word;
       white-space: pre-wrap;
+      transition: border-color var(--transition);
+      position: relative;
+    }
+
+    .output-box.has-content {
+      border-color: rgba(126,232,194,.2);
+    }
+
+    .output-box.error {
+      color: var(--error);
+      border-color: rgba(255,107,107,.2);
+    }
+
+    .output-empty {
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* result token highlight */
+    .token-encoded { color: var(--accent); }
+    .token-space   { color: var(--muted); }
+
+    /* ─── COPY BUTTON ─────────────────────────────────────────────── */
+    .copy-btn {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 12px;
+      background: none;
+      border: 1px solid var(--border2);
+      border-radius: var(--radius-sm);
+      color: var(--muted);
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all var(--transition);
+      white-space: nowrap;
+    }
+
+    .copy-btn:hover { color: var(--text); border-color: var(--muted); }
+
+    .copy-btn.copied {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    .copy-btn svg { width: 12px; height: 12px; flex-shrink: 0; }
+
+    /* ─── TOAST ───────────────────────────────────────────────────── */
+    .toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--surface2);
+      border: 1px solid rgba(126,232,194,.4);
+      color: var(--accent);
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      padding: 9px 18px;
+      border-radius: 99px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s ease, transform .2s ease;
+      box-shadow: 0 4px 20px rgba(0,0,0,.4);
+      z-index: 100;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ─── REFERENCE PANEL ─────────────────────────────────────────── */
+    .ref-toggle {
+      width: 100%;
+      max-width: 680px;
+      margin-top: 14px;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--muted);
+      font-family: 'Syne', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      padding: 10px;
+      cursor: pointer;
+      transition: all var(--transition);
+      animation: fadeUp .5s .2s ease both;
+    }
+
+    .ref-toggle:hover { color: var(--text); border-color: var(--muted); }
+
+    .ref-panel {
+      width: 100%;
+      max-width: 680px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      max-height: 0;
+      transition: max-height .35s ease, opacity .25s ease;
+      opacity: 0;
+      animation: fadeUp .5s .2s ease both;
+    }
+
+    .ref-panel.open {
+      max-height: 400px;
+      opacity: 1;
+    }
+
+    .ref-inner { padding: 16px 20px; }
+
+    .ref-inner p {
+      font-size: 12px;
+      color: var(--muted);
+      font-family: 'DM Mono', monospace;
+      margin-bottom: 12px;
+      line-height: 1.6;
+    }
+
+    .alphabet-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+      gap: 5px;
+    }
+
+    .alpha-item {
+      background: var(--surface2);
+      border-radius: 5px;
+      padding: 5px 8px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 4px;
+    }
+
+    .alpha-letter { color: var(--text); font-weight: 500; }
+    .alpha-code   { color: var(--accent); }
+
+    /* ─── KEYBOARD HINT ───────────────────────────────────────────── */
+    .kbd-hint {
+      font-size: 11px;
+      color: var(--muted);
+      font-family: 'DM Mono', monospace;
+      text-align: center;
+      margin-top: 12px;
+      animation: fadeUp .5s .3s ease both;
+    }
+
+    kbd {
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-size: 10px;
+      font-family: 'DM Mono', monospace;
+      color: var(--text);
+    }
+
+    /* ─── LIVE INDICATOR ──────────────────────────────────────────── */
+    .live-dot {
+      width: 6px; height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 5px;
+      animation: pulse 1.8s ease infinite;
+    }
+
+    /* ─── ANIMATIONS ──────────────────────────────────────────────── */
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: .4; transform: scale(.85); }
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0; }
+    }
+
+    .cursor {
+      display: inline-block;
+      width: 2px; height: 1em;
+      background: var(--accent);
+      vertical-align: text-bottom;
+      margin-left: 1px;
+      animation: blink .9s step-end infinite;
+    }
+
+    /* ─── RESPONSIVE ──────────────────────────────────────────────── */
+    @media (max-width: 480px) {
+      header { padding: 32px 0 24px; }
+      .action-bar { flex-wrap: wrap; }
+      .char-count { width: 100%; order: 3; }
+      .btn-group { width: 100%; }
+      .btn { flex: 1; text-align: center; }
+      .alphabet-grid { grid-template-columns: repeat(auto-fill, minmax(65px, 1fr)); }
     }
   </style>
 </head>
 <body>
 
-<div class="container">
-  <h1>HMM Lang</h1>
-  <p>Encode & Decode your hmmmm language</p>
+  <!-- ── HEADER ─────────────────────────────────────── -->
+  <header>
+    <div class="logo-wrap">
+      <div class="logo-icon">Ħ</div>
+      <h1>HMM <span>Lang</span></h1>
+    </div>
+    <p class="tagline">// encode · decode · speak in h's</p>
+  </header>
 
-  <textarea id="input" placeholder="Type here..."></textarea>
+  <!-- ── MAIN CARD ───────────────────────────────────── -->
+  <div class="card">
 
-  <div class="buttons">
-    <button onclick="encode()">Encode</button>
-    <button onclick="decode()">Decode</button>
+    <!-- Mode toggle -->
+    <div class="mode-bar" role="tablist">
+      <button class="mode-btn active" id="btn-encode" role="tab" aria-selected="true"
+              onclick="setMode('encode')">⟶ Encode</button>
+      <button class="mode-btn" id="btn-decode" role="tab" aria-selected="false"
+              onclick="setMode('decode')">⟵ Decode</button>
+    </div>
+
+    <!-- Input -->
+    <div class="input-section">
+      <p class="section-label" id="input-label">Plain text</p>
+      <textarea id="input-area"
+                placeholder="Type something to encode…"
+                oninput="onInput()"
+                onkeydown="onKeyDown(event)"
+                spellcheck="false"></textarea>
+    </div>
+
+    <!-- Action bar -->
+    <div class="action-bar">
+      <span class="char-count" id="char-count">0 chars</span>
+      <div class="btn-group">
+        <button class="btn btn-ghost" onclick="clearAll()">Clear</button>
+        <button class="btn btn-primary" id="run-btn" onclick="run()">Encode →</button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Output -->
+    <div class="output-section">
+      <div class="output-header">
+        <p class="section-label" id="output-label">
+          <span class="live-dot" id="live-dot" style="display:none"></span>
+          HMM Lang output
+        </p>
+        <button class="copy-btn" id="copy-btn" onclick="copyOutput()" title="Copy to clipboard" style="display:none">
+          <!-- clipboard icon -->
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6">
+            <rect x="5" y="4" width="8" height="10" rx="1.5"/>
+            <path d="M3 12H2.5A1.5 1.5 0 0 1 1 10.5v-8A1.5 1.5 0 0 1 2.5 1h7A1.5 1.5 0 0 1 11 2.5V4"/>
+          </svg>
+          <span id="copy-label">Copy</span>
+        </button>
+      </div>
+      <div class="output-box" id="output-box">
+        <span class="output-empty">Output will appear here…</span>
+      </div>
+    </div>
+
+  </div><!-- /card -->
+
+  <!-- ── REFERENCE TOGGLE ────────────────────────────── -->
+  <button class="ref-toggle" onclick="toggleRef()" id="ref-toggle-btn">
+    ﹢ Alphabet Reference
+  </button>
+  <div class="ref-panel" id="ref-panel">
+    <div class="ref-inner">
+      <p>Each letter maps to <strong style="color:var(--text)">h + its position</strong> in the alphabet (a=1, z=26).
+         Spaces become <code style="color:var(--accent)">h0</code>.
+         Decoder also accepts <strong style="color:var(--text)">hmmmm</strong> format (count the m's).</p>
+      <div class="alphabet-grid" id="alpha-grid"></div>
+    </div>
   </div>
 
-  <div class="output" id="output"></div>
-</div>
+  <!-- ── KEYBOARD HINT ───────────────────────────────── -->
+  <p class="kbd-hint"><kbd>⌘ Enter</kbd> or <kbd>Ctrl Enter</kbd> to translate</p>
 
-<script>
-  function encode() {
-    const text = document.getElementById("input").value.toLowerCase();
-    let result = [];
+  <!-- ── TOAST ──────────────────────────────────────── -->
+  <div class="toast" id="toast">✓ Copied to clipboard</div>
 
-    for (let char of text) {
-      if (char >= 'a' && char <= 'z') {
-        let pos = char.charCodeAt(0) - 96;
-        result.push("h" + pos);
-      } else if (char === " ") {
-        result.push(" ");
-      }
+  <script>
+    /* ═══════════════════════════════════════════════════
+       HMM LANG — CORE LOGIC
+       ═══════════════════════════════════════════════════ */
+
+    // alphabet position: a=1 … z=26
+    const letterToPos = ch => ch.toLowerCase().charCodeAt(0) - 96; // 'a'.charCodeAt(0) = 97
+
+    // build "hmmmm" string with N m's
+    const toHmmm  = n => 'h' + 'm'.repeat(n);
+
+    // ENCODE: plain text → HMM Lang
+    function encode(text) {
+      return text.split('').map(ch => {
+        if (ch === ' ')  return 'h0';         // space → h0
+        if (ch === '\n') return '\n';          // keep newlines
+        const lower = ch.toLowerCase();
+        if (lower >= 'a' && lower <= 'z') {
+          return 'h' + letterToPos(lower);    // a→h1, z→h26
+        }
+        return ch;                             // punctuation passes through
+      }).join(' ');
     }
 
-    document.getElementById("output").innerText = result.join(" ");
-  }
+    // DECODE: HMM Lang → plain text
+    // Supports:  h<number>  and  hmmmm (count m's)
+    function decode(text) {
+      // Tokenise by whitespace
+      const tokens = text.trim().split(/\s+/);
+      const result = [];
 
-  function decode() {
-    const text = document.getElementById("input").value.trim();
-    const parts = text.split(/\s+/);
-    let result = "";
+      for (const tok of tokens) {
+        const lower = tok.toLowerCase();
 
-    for (let part of parts) {
-      if (part.startsWith("h")) {
-        // numeric format (h15)
-        if (!isNaN(part.slice(1))) {
-          let num = parseInt(part.slice(1));
-          if (num >= 1 && num <= 26) {
-            result += String.fromCharCode(96 + num);
+        // ── h<number> format ──────────────────────────
+        const numMatch = lower.match(/^h(\d+)$/);
+        if (numMatch) {
+          const n = parseInt(numMatch[1], 10);
+          if (n === 0) {
+            result.push(' ');                  // h0 = space
+          } else if (n >= 1 && n <= 26) {
+            result.push(String.fromCharCode(96 + n)); // h1→a … h26→z
+          } else {
+            result.push('[?]');                // out of range
           }
+          continue;
         }
-        // m format (hmmmm)
-        else {
-          let count = part.length - 1;
-          if (count >= 1 && count <= 26) {
-            result += String.fromCharCode(96 + count);
+
+        // ── hmmmm format (h + only m's) ───────────────
+        const hmmmMatch = lower.match(/^h(m+)$/);
+        if (hmmmMatch) {
+          const n = hmmmMatch[1].length;       // count m's
+          if (n >= 1 && n <= 26) {
+            result.push(String.fromCharCode(96 + n));
+          } else {
+            result.push('[?]');
           }
+          continue;
         }
+
+        // ── pass-through (punctuation, numbers, etc.) ─
+        result.push(tok);
+      }
+
+      return result.join('');
+    }
+
+    /* ═══════════════════════════════════════════════════
+       UI STATE
+       ═══════════════════════════════════════════════════ */
+
+    let currentMode    = 'encode'; // 'encode' | 'decode'
+    let liveEnabled    = true;
+    let toastTimeout   = null;
+    let refOpen        = false;
+    let lastOutput     = '';
+
+    /* ─── Mode switching ─────────────────────────────── */
+    function setMode(mode) {
+      currentMode = mode;
+
+      document.getElementById('btn-encode').classList.toggle('active', mode === 'encode');
+      document.getElementById('btn-decode').classList.toggle('active', mode === 'decode');
+
+      document.getElementById('input-label').textContent =
+        mode === 'encode' ? 'Plain text' : 'HMM Lang tokens';
+      document.getElementById('output-label').innerHTML =
+        (liveEnabled ? '<span class="live-dot" id="live-dot"></span>' : '') +
+        (mode === 'encode' ? 'HMM Lang output' : 'Decoded text');
+      document.getElementById('run-btn').textContent =
+        mode === 'encode' ? 'Encode →' : '← Decode';
+      document.getElementById('input-area').placeholder =
+        mode === 'encode'
+          ? 'Type something to encode…'
+          : 'Paste HMM Lang here… e.g. h8 h5 h12 h12 h15';
+
+      // re-run on mode switch if there's input
+      if (document.getElementById('input-area').value.trim()) run();
+      else clearOutput();
+    }
+
+    /* ─── Translate & display ────────────────────────── */
+    function run() {
+      const input = document.getElementById('input-area').value;
+      if (!input.trim()) { clearOutput(); return; }
+
+      const result = currentMode === 'encode' ? encode(input) : decode(input);
+      displayOutput(result);
+    }
+
+    function displayOutput(text) {
+      lastOutput = text;
+      const box = document.getElementById('output-box');
+      box.classList.remove('output-empty', 'error');
+      box.classList.add('has-content');
+
+      // Syntax-highlight encoded tokens in encode mode
+      if (currentMode === 'encode') {
+        box.innerHTML = highlightEncoded(text) + '<span class="cursor"></span>';
       } else {
-        result += " ";
+        box.textContent = text;
+        box.innerHTML += '<span class="cursor"></span>';
+      }
+
+      document.getElementById('copy-btn').style.display = 'flex';
+      document.getElementById('live-dot').style.display  = 'inline-block';
+    }
+
+    // Colour h<n> tokens in output
+    function highlightEncoded(text) {
+      return text.replace(/(h\d+|h0)/g,
+        m => `<span class="token-encoded">${m}</span>`
+      );
+    }
+
+    function clearOutput() {
+      const box = document.getElementById('output-box');
+      box.classList.remove('has-content', 'error');
+      box.innerHTML = '<span class="output-empty">Output will appear here…</span>';
+      document.getElementById('copy-btn').style.display = 'none';
+      const dot = document.getElementById('live-dot');
+      if (dot) dot.style.display = 'none';
+      lastOutput = '';
+    }
+
+    function clearAll() {
+      document.getElementById('input-area').value = '';
+      updateCharCount(0);
+      clearOutput();
+      document.getElementById('input-area').focus();
+    }
+
+    /* ─── Live typing ────────────────────────────────── */
+    function onInput() {
+      const val = document.getElementById('input-area').value;
+      updateCharCount(val.length);
+      if (liveEnabled) run();
+    }
+
+    function updateCharCount(n) {
+      document.getElementById('char-count').textContent =
+        n === 0 ? '0 chars' : `${n} char${n !== 1 ? 's' : ''}`;
+    }
+
+    /* ─── Keyboard shortcuts ─────────────────────────── */
+    function onKeyDown(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        run();
       }
     }
 
-    document.getElementById("output").innerText = result;
-  }
-</script>
+    /* ─── Copy to clipboard ──────────────────────────── */
+    function copyOutput() {
+      if (!lastOutput) return;
+
+      // Try modern clipboard API first, fall back to execCommand for local files
+      const doConfirm = () => {
+        const btn   = document.getElementById('copy-btn');
+        const label = document.getElementById('copy-label');
+        btn.classList.add('copied');
+        label.textContent = 'Copied!';
+        showToast('✓ Copied to clipboard');
+        setTimeout(() => {
+          btn.classList.remove('copied');
+          label.textContent = 'Copy';
+        }, 2000);
+      };
+
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(lastOutput).then(doConfirm).catch(() => fallbackCopy(doConfirm));
+      } else {
+        fallbackCopy(doConfirm);
+      }
+    }
+
+    function fallbackCopy(onSuccess) {
+      const ta = document.createElement('textarea');
+      ta.value = lastOutput;
+      ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try {
+        document.execCommand('copy');
+        onSuccess();
+      } catch (e) {
+        showToast('⚠ Copy failed — please copy manually');
+      }
+      document.body.removeChild(ta);
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => t.classList.remove('show'), 2200);
+    }
+
+    /* ─── Alphabet reference panel ───────────────────── */
+    function toggleRef() {
+      refOpen = !refOpen;
+      document.getElementById('ref-panel').classList.toggle('open', refOpen);
+      document.getElementById('ref-toggle-btn').textContent =
+        refOpen ? '− Alphabet Reference' : '﹢ Alphabet Reference';
+    }
+
+    function buildAlphaGrid() {
+      const grid = document.getElementById('alpha-grid');
+      for (let i = 1; i <= 26; i++) {
+        const letter = String.fromCharCode(96 + i);
+        const div = document.createElement('div');
+        div.className = 'alpha-item';
+        div.innerHTML = `<span class="alpha-letter">${letter}</span>
+                         <span class="alpha-code">h${i}</span>`;
+        grid.appendChild(div);
+      }
+    }
+
+    /* ─── Init ───────────────────────────────────────── */
+    buildAlphaGrid();
+
+    // Focus input on load
+    window.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('input-area').focus();
+    });
+  </script>
 
 </body>
 </html>
