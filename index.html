@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>HMM Lang Translator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .container {
+      width: 90%;
+      max-width: 600px;
+      background: #1e293b;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 5px;
+    }
+
+    p {
+      text-align: center;
+      font-size: 14px;
+      color: #94a3b8;
+    }
+
+    textarea {
+      width: 100%;
+      height: 100px;
+      margin-top: 15px;
+      padding: 10px;
+      border-radius: 8px;
+      border: none;
+      outline: none;
+      resize: none;
+      background: #0f172a;
+      color: white;
+    }
+
+    .buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    button {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      background: #3b82f6;
+      color: white;
+      font-weight: bold;
+    }
+
+    button:hover {
+      background: #2563eb;
+    }
+
+    .output {
+      margin-top: 15px;
+      padding: 10px;
+      background: #0f172a;
+      border-radius: 8px;
+      min-height: 60px;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>HMM Lang</h1>
+  <p>Encode & Decode your hmmmm language</p>
+
+  <textarea id="input" placeholder="Type here..."></textarea>
+
+  <div class="buttons">
+    <button onclick="encode()">Encode</button>
+    <button onclick="decode()">Decode</button>
+  </div>
+
+  <div class="output" id="output"></div>
+</div>
+
+<script>
+  function encode() {
+    const text = document.getElementById("input").value.toLowerCase();
+    let result = [];
+
+    for (let char of text) {
+      if (char >= 'a' && char <= 'z') {
+        let pos = char.charCodeAt(0) - 96;
+        result.push("h" + pos);
+      } else if (char === " ") {
+        result.push(" ");
+      }
+    }
+
+    document.getElementById("output").innerText = result.join(" ");
+  }
+
+  function decode() {
+    const text = document.getElementById("input").value.trim();
+    const parts = text.split(/\s+/);
+    let result = "";
+
+    for (let part of parts) {
+      if (part.startsWith("h")) {
+        // numeric format (h15)
+        if (!isNaN(part.slice(1))) {
+          let num = parseInt(part.slice(1));
+          if (num >= 1 && num <= 26) {
+            result += String.fromCharCode(96 + num);
+          }
+        }
+        // m format (hmmmm)
+        else {
+          let count = part.length - 1;
+          if (count >= 1 && count <= 26) {
+            result += String.fromCharCode(96 + count);
+          }
+        }
+      } else {
+        result += " ";
+      }
+    }
+
+    document.getElementById("output").innerText = result;
+  }
+</script>
+
+</body>
+</html>
